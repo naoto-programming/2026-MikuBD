@@ -1,0 +1,189 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ビートソード - 2D横スクロールリズム協力アクション</title>
+    <link rel="stylesheet" href="style.css">
+<base target="_blank">
+</head>
+<body>
+    <div id="gameContainer">
+        <canvas id="gameCanvas"></canvas>
+
+        <!-- HUD -->
+        <div id="hud" class="hidden">
+            <div class="hud-panel">
+                <div class="hud-label">SCORE</div>
+                <div class="hud-value" id="scoreValue">0</div>
+            </div>
+            <div class="hud-panel">
+                <div class="hud-label">STAGE</div>
+                <div class="hud-value" id="stageValue">1-1</div>
+            </div>
+            <div class="hud-panel">
+                <div class="hud-label">WAVE</div>
+                <div class="hud-value" id="waveValue">1/1</div>
+            </div>
+            <div class="hud-panel">
+                <div class="hud-label">BPM</div>
+                <div class="hud-value" id="bpmValue">120</div>
+            </div>
+            <div class="hud-panel">
+                <div class="hud-label">HP</div>
+                <div class="hp-bar"><div class="hp-fill high" id="hpBar" style="width:100%"></div></div>
+                <div class="hud-value" id="hpValue" style="font-size:1em">100/100</div>
+            </div>
+        </div>
+
+        <div id="bottomHud" class="hidden">
+            <div class="combo-display" id="comboDisplay">
+                <div class="combo-count" id="comboCount">0</div>
+                <div class="combo-label">COMBO</div>
+            </div>
+
+            <div class="tutorial-box" id="tutorialBox">
+                何かキーを押す、または画面をタップ
+            </div>
+        </div>
+
+        <!-- 固有ギミック発動などのポップアップ通知は画面上部に表示する -->
+        <div id="topNotice" class="hidden">
+            <div class="tutorial-box hidden" id="gimmickIndicator"></div>
+        </div>
+
+        <div class="connection-status hidden" id="connStatus">OFFLINE</div>
+
+        <!-- Menu Screen -->
+        <div id="menuScreen" class="screen">
+            <h1>ビートソード</h1>
+            <div class="subtitle">2D横スクロール リズム協力アクション</div>
+            <div class="btn-group">
+                <button class="btn" onclick="Game.showModeSelect()">ゲーム開始</button>
+                <button class="btn" onclick="Game.showHowToPlay()">遊び方</button>
+                <button class="btn" onclick="Game.showLatencyTest()">音声遅延テスト</button>
+            </div>
+        </div>
+
+        <!-- Mode Select -->
+        <div id="modeScreen" class="screen hidden">
+            <h2>モード選択</h2>
+            <div class="btn-group">
+                <button class="btn" onclick="Game.startSinglePlayer()">1人プレイ</button>
+                <button class="btn" onclick="Game.showLobby()">LANマルチプレイ</button>
+            </div>
+            <button class="btn" onclick="Game.showMenu()" style="margin-top:30px;">戻る</button>
+        </div>
+
+        <!-- Character Select -->
+        <div id="charScreen" class="screen hidden">
+            <h2>キャラクター選択</h2>
+            <div class="subtitle" id="charSelectSubtitle">難易度が低い順</div>
+            <div class="char-select" id="charSelect"></div>
+            <div class="btn-group" id="difficultyGroup">
+                <button class="btn difficulty-btn" id="difficulty-easy" onclick="Game.setDifficulty('easy')">EASY</button>
+                <button class="btn difficulty-btn selected" id="difficulty-normal" onclick="Game.setDifficulty('normal')">NORMAL</button>
+                <button class="btn difficulty-btn" id="difficulty-hard" onclick="Game.setDifficulty('hard')">HARD</button>
+            </div>
+            <p id="difficultyHostNote" class="hidden" style="color:#888;font-size:0.85em;margin:6px 0;">難易度はホストが選択します</p>
+            <div class="btn-group">
+                <button class="btn" onclick="Game.confirmChar()">決定</button>
+                <button class="btn" onclick="Game.showModeSelect()">戻る</button>
+            </div>
+        </div>
+
+        <!-- キャラクターを決定した後、他のプレイヤーの選択を待つ画面 -->
+        <div id="waitingScreen" class="screen hidden">
+            <h2>待機中</h2>
+            <div class="subtitle">他のプレイヤーの選択を待っています...</div>
+            <div id="waitingPlayerList" style="margin:20px 0;"></div>
+            <button class="btn" onclick="Game.showMenu()" style="margin-top:20px;">やめる</button>
+        </div>
+
+        <!-- Lobby Screen -->
+        <div id="lobbyScreen" class="screen hidden">
+            <h2>LANロビー</h2>
+            <div id="lobbyContent">
+                <div class="btn-group">
+                    <button class="btn" onclick="Game.createHost()">ホストを作成</button>
+                    <button class="btn" onclick="Game.showJoin()">参加する</button>
+                </div>
+            </div>
+            <div id="hostPanel" class="hidden" style="text-align:center;margin-top:20px;">
+                <p style="margin:10px 0;">部屋コード: <span id="hostIP" style="color:#ff6b35;font-weight:bold;font-size:1.6em;letter-spacing:2px;">----</span></p>
+                <p style="color:#888;font-size:0.9em;margin-bottom:15px;">同じWi-Fi内のプレイヤーにこの部屋コードを伝えてください</p>
+                <div id="playerList" style="margin:15px 0;"></div>
+                <button class="btn" onclick="Game.beginCharacterSelectPhase()" id="startMultiBtn">開始(全員でキャラクター選択へ)</button>
+            </div>
+            <div id="joinPanel" class="hidden" style="text-align:center;margin-top:20px;">
+                <p style="margin:10px 0;">部屋コードを入力:</p>
+                <input type="text" id="joinIP" placeholder="例: AB12" maxlength="6" style="text-transform:uppercase;">
+                <br>
+                <button class="btn" onclick="Game.joinHost()" style="margin-top:10px;">接続</button>
+                <p id="joinStatus" style="margin:10px;color:#888;"></p>
+            </div>
+            <button class="btn" onclick="Game.showModeSelect()" style="margin-top:20px;">戻る</button>
+        </div>
+
+        <!-- Upgrade Screen -->
+        <div id="upgradeScreen" class="screen hidden">
+            <h2>ステージクリア！</h2>
+            <div class="subtitle">強化を1つ選択してください</div>
+            <div class="btn-group" id="upgradeChoices" style="flex-wrap:wrap;"></div>
+        </div>
+
+        <!-- Game Over Screen -->
+        <div id="gameOverScreen" class="screen hidden">
+            <h2 id="gameOverTitle" style="color:#e74c3c;margin-bottom:20px;">ゲームオーバー</h2>
+            <div class="subtitle" id="gameOverStats"></div>
+            <div class="btn-group">
+                <button class="btn" onclick="Game.restart()">再挑戦</button>
+                <button class="btn" onclick="Game.showMenu()">メニューへ</button>
+            </div>
+        </div>
+
+        <!-- How to Play -->
+        <div id="howToScreen" class="screen hidden">
+            <h2>遊び方</h2>
+            <div class="howto-text">
+                <p><strong>基本操作:</strong></p>
+                <p>• <strong>何かキーを押す、または画面をタップ</strong> - 表示中の最も近いノーツを判定（剣攻撃・能力・防御を自動で見分けます）</p>
+                <p><strong>リズムシステム:</strong></p>
+                <p>BGMの拍に合わせてノーツが流れてきます。タイミングよくキーを押して攻撃！</p>
+                <p>Perfect > Great > Good > Miss の判定があります。</p>
+                <p><strong>LANでの複数人プレイの方法:</strong></p>
+                <p>1. 誰かが部屋を作る</p>
+                <p>2. 同じWi-Fi下で部屋を探し参加する</p>
+                <p>3. ホストがプレイを押すまで待機する</p>
+                <p>4. 全員が職業を選び、ホストが難易度を選ぶ</p>
+                <p>5. 全員が同じフィールドで敵を倒す(難易度と人数によって敵の数や体力が変化)</p>
+                <p>最大8人で協力プレイ可能。ホストPCがゲームサーバーを兼任します。</p>
+                <p><strong>成長システム:</strong></p>
+                <p>ステージクリア時に3つの強化から1つ選択。ローグライト方式で進むほど強くなる！</p>
+            </div>
+            <button class="btn" onclick="Game.showMenu()" style="margin-top:30px;">戻る</button>
+        </div>
+
+        <!-- Audio Latency Test -->
+        <div id="latencyScreen" class="screen hidden">
+            <h2>音声遅延テスト</h2>
+            <div class="subtitle">無線イヤホンなどの音の遅れを測定して補正します</div>
+            <p style="color:#aaa;margin:10px 0;max-width:420px;">クリック音に合わせて<strong>画面をタップ、またはスペースキー</strong>を押してください(数回)</p>
+            <p style="color:#888;font-size:0.85em;margin:6px 0;max-width:420px;">※この補正は判定タイミングやノーツの見た目のズレを直すものです。無線(Bluetooth)特有の音の遅れそのものは無くせないため、パーフェクト音などの遅れが気になる場合は<strong>有線イヤホン・スピーカー</strong>のご利用もおすすめです。</p>
+            <div id="latencyBeatIndicator" style="width:70px;height:70px;border-radius:50%;background:#333;margin:25px auto;transition:transform 0.1s ease, background 0.1s ease;"></div>
+            <div id="latencyStatus" style="font-size:1.1em;color:#ff6b35;margin:10px 0;min-height:1.4em;">「テスト開始」を押してください</div>
+            <div class="btn-group">
+                <button class="btn" id="latencyStartBtn" onclick="Game.startLatencyTest()">テスト開始</button>
+                <button class="btn" onclick="Game.resetLatencyOffset()">補正をリセット</button>
+                <button class="btn" onclick="Game.showMenu()">戻る</button>
+            </div>
+        </div>
+    </div>
+
+<!-- PeerJS: WebRTCの接続確立(シグナリング)を無料の公開ブローカー経由で行うためのライブラリ。
+     GitHub Pages(静的ホスティング)は自前のサーバーを持てないため、これを使うことで
+     専用サーバーを用意せずに実際のP2P通信(LANマルチプレイ)を実現する -->
+<script src="https://cdn.jsdelivr.net/npm/peerjs@1.5.4/dist/peerjs.min.js" integrity="sha384-nlUQ8ZqCbvStErob+biJNzSgltf6urV3VGqhfIfzhmg9RXmpeRm76ELw0pYnKlTR" crossorigin="anonymous"></script>
+<script src="game.js"></script>
+</body>
+</html>
